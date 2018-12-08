@@ -11,7 +11,7 @@ zeros(dims...) = Base.zeros(Float32, dims...)
 unsqueeze(xs, dim) = reshape(xs, (size(xs)[1:dim-1]..., 1, size(xs)[dim:end]...))
 
 stack(xs, dim) = cat(dim, unsqueeze.(xs, dim)...)
-unstack(xs, dim) = [slicedim(xs, dim, i) for i = 1:size(xs, dim)]
+unstack(xs, dim) = [selectdim(xs, dim, i) for i = 1:size(xs, dim)]
 
 """
     chunk(xs, n)
