@@ -2,9 +2,9 @@ abstract type GradientStyle end
 struct StatefulGradient <: GradientStyle end
 struct StatelessGradient <: GradientStyle end
 
-Base.promote_rule(::Type{T}, ::Type{T}) where {T <: GraidentStyle} = T
-Base.promote_rule(::Type{StatefulGradient}, ::Type{<:GraidentStyle}) = StatefukGradient
-Base.promote_rule(::Type{<:GraidentStyle}, ::Type{StatefulGradient}) = StatefukGradient
+Base.promote_rule(::Type{T}, ::Type{T}) where {T <: GradientStyle} = T
+Base.promote_rule(::Type{StatefulGradient}, ::Type{<:GradientStyle}) = StatefulGradient
+Base.promote_rule(::Type{<:GradientStyle}, ::Type{StatefulGradient}) = StatefulGradient
 
 """
     GradientStyle(o)
@@ -27,7 +27,7 @@ GradientStyle(::Type{O}) where {O <: AbstractOptimiser} = IdDict in fieldtypes(O
 GradientStyle(::Type{Descent}) = StatelessGradient()
 GradientStyle(::Type{WeightDecay}) = StatelessGradient()
 
-for sT in :([Momentum, Nesterov, RMSProp, ADAM, RADAM, AdaMax, ADAGrad, ADADelta, AMSGrad, NADAM, ADAMW, Lookahead]).args
+for sT in :([Momentum, Nesterov, RMSProp, ADAM, RADAM, AdaMax, ADAGrad, ADADelta, AMSGrad, NADAM, ADAMW]).args
   @eval GradientStyle(::Type{$sT}) = StatefulGradient()
 end
 
@@ -40,7 +40,8 @@ return `true` if the optimiser is stateful.
 """
 is_stateful(gs::StatelessGradient) = false
 is_stateful(gs::StatefulGradient) = true
-is_stateful(o::AbstractOptimiser) = is_stateful(GradientStyle(o))
+is_stateful(::Type{O}) where {O<:AbstractOptimiser}= is_stateful(GradientStyle(O))
+is_stateful(o::AbstractOptimiser) = is_stateful(typeof(o))
 
 """
     get_state!(o, x)
@@ -52,7 +53,7 @@ get_state!(gs::StatelessGradient, o, x) = error("optimiser $o is stateless")
 function get_state!(gs::StatefulGradient, o, x)
   state = get_states(o)
   if haskey(state, x)
-    return get(state, x)
+    return state[x]
   else
     return get!(state, x, init_state(o, x))
   end

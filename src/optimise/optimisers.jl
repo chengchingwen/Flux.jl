@@ -72,7 +72,7 @@ init_state(o::Momentum, x) = zero(x)
 
 function apply!(o::Momentum, x, Δ)
   η, ρ = o.eta, o.rho
-  v = get!(o.velocity, x, init_state(o, x))::typeof(x)
+  v = get_state!(o, x)::typeof(x)
   @. v = ρ * v - η * Δ
   @. Δ = -v
 end
@@ -105,7 +105,7 @@ init_state(o::Nesterov, x) = zero(x)
 
 function apply!(o::Nesterov, x, Δ)
   η, ρ = o.eta, o.rho
-  v = get!(o.velocity, x, init_state(o, x))::typeof(x)
+  v = get_state!(o, x)::typeof(x)
   d = @. ρ^2 * v - (1+ρ) * η * Δ
   @. v = ρ*v - η*Δ
   @. Δ = -d
@@ -142,7 +142,7 @@ init_state(o::RMSProp, x) = zero(x)
 
 function apply!(o::RMSProp, x, Δ)
   η, ρ = o.eta, o.rho
-  acc = get!(o.acc, x, init_state(o ,x))::typeof(x)
+  acc = get_state!(o, x)::typeof(x)
   @. acc = ρ * acc + (1 - ρ) * Δ^2
   @. Δ *= η / (√acc + ϵ)
 end
@@ -178,7 +178,7 @@ init_state(o::ADAM, x) = (zero(x), zero(x), o.beta)
 
 function apply!(o::ADAM, x, Δ)
   η, β = o.eta, o.beta
-  mt, vt, βp = get!(o.state, x, init_state(o, x))
+  mt, vt, βp = get_state!(o, x)
   @. mt = β[1] * mt + (1 - β[1]) * Δ
   @. vt = β[2] * vt + (1 - β[2]) * Δ^2
   @. Δ =  mt / (1 - βp[1]) / (√(vt / (1 - βp[2])) + ϵ) * η
@@ -219,7 +219,7 @@ init_state(o::RADAM, x) = (zero(x), zero(x), o.beta, 1)
 function apply!(o::RADAM, x, Δ)
   η, β = o.eta, o.beta
   ρ∞ = 2/(1-β[2])-1
-  mt, vt, βp, t = get!(o.state, x, init_state(o, x))
+  mt, vt, βp, t = get_state!(o, x)
   @. mt = β[1] * mt + (1 - β[1]) * Δ
   @. vt = β[2] * vt + (1 - β[2]) * Δ^2
   ρ = ρ∞ - 2t*βp[2]/(1-βp[2])
@@ -263,7 +263,7 @@ init_state(o::AdaMax, x) = (zero(x), zero(x), o.beta)
 
 function apply!(o::AdaMax, x, Δ)
   η, β = o.eta, o.beta
-  mt, ut, βp = get!(o.state, x, init_state(o, x))
+  mt, ut, βp = get_state!(o, x)
   @. mt = β[1] * mt + (1 - β[1]) * Δ
   @. ut = max(β[2] * ut, abs(Δ))
   @. Δ = (η/(1 - βp[1])) * mt/(ut + ϵ)
@@ -301,7 +301,7 @@ init_state(o::ADAGrad, x) = fill!(similar(x), ϵ)
 
 function apply!(o::ADAGrad, x, Δ)
   η = o.eta
-  acc = get!(o.acc, x, init_state(o, x))::typeof(x)
+  acc = get_state!(o, x)::typeof(x)
   @. acc += Δ^2
   @. Δ *= η / (√acc + ϵ)
 end
@@ -334,7 +334,7 @@ init_state(o::ADADelta, x) = (zero(x), zero(x))
 
 function apply!(o::ADADelta, x, Δ)
   ρ = o.rho
-  acc, Δacc = get!(o.state, x, init_state(o, x))
+  acc, Δacc = get_state!(o, x)
   @. acc = ρ * acc + (1 - ρ) * Δ^2
   @. Δ *= √Δacc/ (√acc + ϵ)
   @. Δacc = ρ * Δacc + (1 - ρ) * Δ^2
@@ -371,7 +371,7 @@ init_state(o::AMSGrad, x) = (fill!(similar(x), ϵ), fill!(similar(x), ϵ), fill!
 
 function apply!(o::AMSGrad, x, Δ)
   η, β = o.eta, o.beta
-  mt, vt, v̂t = get!(o.state, x, init_state(o, x))
+  mt, vt, v̂t = get_state!(o, x)
   @. mt = β[1] * mt + (1 - β[1]) * Δ
   @. vt = β[2] * vt + (1 - β[2]) * Δ ^ 2
   @. v̂t = max(v̂t, vt)
@@ -408,38 +408,13 @@ init_state(o::NADAM, x) = (zero(x), zero(x), o.beta)
 
 function apply!(o::NADAM, x, Δ)
   η, β = o.eta, o.beta
-  mt, vt, (β1p, β2p) = get!(o.state, x, init_state(o, x))
+  mt, vt, (β1p, β2p) = get_state!(o, x)
   @. mt = β[1] * mt + (1 - β[1]) * Δ
   @. vt = β[2] * vt + (1 - β[2]) * Δ^2
   @. Δ = (β[1] * mt / (1 - β[1] * β1p) + (1 - β[1]) * Δ / (1 - β1p)) / (√(vt * β[2] / (1 - β2p)) + ϵ) * η
   o.state[x] = (mt, vt, (β1p * β[1], β2p * β[2]))
   return Δ
 end
-
-"""
-    ADAMW(η, β::Tuple, decay)
-
-Variant of ADAM defined by fixing weight decay regularization.
-
-## Parameters
-  - Learning Rate (η): Defaults to `0.001`.
-  - Beta (β::Tuple): The first element refers to β1 and the second to β2. Defaults to (0.9, 0.999).
-  - decay: Decay applied to weights during optimisation. Defaults to 0.
-
-## Examples
-```julia
-opt = ADAMW() # uses default η, β and decay
-opt = ADAMW(0.001, (0.89, 0.995), 0.1)
-```
-
-## References
-[ADAMW](https://arxiv.org/abs/1711.05101)
-"""
-const ADAMW = Optimiser{Tuple{ADAM, WeightDecay}}
-ADAMW(η = 0.001, β = (0.9, 0.999), decay = 0) =
-  Optimiser(ADAM(η, β), WeightDecay(decay))
-
-init_state(o::ADAMW, x) = init_state(o[1], x)
 
 
 # Compose optimizers
@@ -453,6 +428,7 @@ usual.
 """
 mutable struct Optimiser{T<:Tuple} <: AbstractOptimiser
   os::T
+  Optimiser(os::Tuple) = new{typeof(os)}(os)
 end
 
 Optimiser(o...) = Optimiser(o)
@@ -555,3 +531,29 @@ function apply!(o::WeightDecay, x, Δ)
   wd = o.wd
   @. Δ += wd * x
 end
+
+"""
+    ADAMW(η, β::Tuple, decay)
+
+Variant of ADAM defined by fixing weight decay regularization.
+
+## Parameters
+  - Learning Rate (η): Defaults to `0.001`.
+  - Beta (β::Tuple): The first element refers to β1 and the second to β2. Defaults to (0.9, 0.999).
+  - decay: Decay applied to weights during optimisation. Defaults to 0.
+
+## Examples
+```julia
+opt = ADAMW() # uses default η, β and decay
+opt = ADAMW(0.001, (0.89, 0.995), 0.1)
+```
+
+## References
+[ADAMW](https://arxiv.org/abs/1711.05101)
+"""
+const ADAMW = Optimiser{Tuple{ADAM, WeightDecay}}
+ADAMW(η = 0.001, β = (0.9, 0.999), decay = 0) =
+  Optimiser(ADAM(η, β), WeightDecay(decay))
+
+init_state(o::ADAMW, x) = init_state(o[1], x)
+
