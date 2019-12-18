@@ -23,7 +23,11 @@ see also [`is_stateful`](@ref).
 """
 GradientStyle(o::AbstractOptimiser) = GradientStyle(typeof(o))
 GradientStyle(::Type{M}) where {M <: AbstractGradientModifier} = StatelessGradient()
-GradientStyle(::Type{O}) where {O <: AbstractOptimiser} = IdDict in fieldtypes(O) ? StatefulGradient() : StatelessGradient()
+if VERSION < v"1.1"
+  GradientStyle(::Type{O}) where {O <: AbstractOptimiser} = IdDict in map(Base.Fix1(fieldtype, A), fieldnames(A)) ? StatefulGradient() : StatelessGradient()
+else
+  GradientStyle(::Type{O}) where {O <: AbstractOptimiser} = IdDict in fieldtypes(O) ? StatefulGradient() : StatelessGradient()
+end
 GradientStyle(::Type{Descent}) = StatelessGradient()
 GradientStyle(::Type{WeightDecay}) = StatelessGradient()
 
